@@ -1,0 +1,43 @@
+name: "Deploy App to AWS EC2"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ec2_ip:
+        description: "EC2 public IP (from terraform output)"
+        required: true
+
+jobs:
+  deploy:
+    name: "Deploy to EC2"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ github.event.inputs.ec2_ip }} >> ~/.ssh/known_hosts
+
+      - name: Copy backend to EC2
+        run: |
+          scp -r backend/* ubuntu@${{ github.event.inputs.ec2_ip }}:/app/backend/
+
+      - name: Copy frontend to EC2
+        run: |
+          scp -r frontend/* ubuntu@${{ github.event.inputs.ec2_ip }}:/app/frontend/
+
+      - name: Deploy backend
+        run: |
+          ssh ubuntu@${{ github.event.inputs.ec2_ip }} "bash /app/deploy-backend.sh"
+
+      - name: Deploy frontend
+        run: |
+          ssh ubuntu@${{ github.event.inputs.ec2_ip }} "bash /app/deploy-frontend.sh"
+
+      - name: Show app URL
+        run: echo "App is live at http://${{ github.event.inputs.ec2_ip }}"
